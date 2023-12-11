@@ -35,18 +35,18 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 var API_KEY = "4196d93d11fa4ba084241415230909";
-function getWeather(location) {
+function getThreeDayForecast(location) {
     return __awaiter(this, void 0, void 0, function () {
         var data;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, fetch("https://api.weatherapi.com/v1/current.json?key=".concat(API_KEY, "&q=").concat(location), { mode: "cors" })];
+                case 0: return [4 /*yield*/, fetch("https://api.weatherapi.com/v1/forecast.json?key=".concat(API_KEY, "&q=").concat(location, "&days=3&aqi=no&alerts=no"), { mode: "cors" })];
                 case 1:
                     data = _a.sent();
-                    console.log(data);
-                    return [2 /*return*/];
+                    console.log(data.json());
+                    return [2 /*return*/, data.json()];
             }
         });
     });
 }
-getWeather('Boston');
+getThreeDayForecast('Boston');
