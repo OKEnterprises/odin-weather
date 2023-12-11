@@ -40,13 +40,94 @@ function getThreeDayForecast(location) {
         var data;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, fetch("https://api.weatherapi.com/v1/forecast.json?key=".concat(API_KEY, "&q=").concat(location, "&days=3&aqi=no&alerts=no"), { mode: "cors" })];
+                case 0: return [4 /*yield*/, fetch("https://api.weatherapi.com/v1/forecast.json?key=".concat(API_KEY, "&q=").concat(location, "&days=2&aqi=no&alerts=no"), { mode: "cors" })];
                 case 1:
                     data = _a.sent();
-                    console.log(data.json());
+                    if (!data.ok) {
+                        throw new Error("Failed to fetch data: ".concat(data.status, " ").concat(data.statusText));
+                    }
                     return [2 /*return*/, data.json()];
             }
         });
     });
 }
-getThreeDayForecast('Boston');
+var page = (function () {
+    var celsius = false;
+    var locale = "Boston";
+    function toggleCelsius() {
+        celsius = !celsius;
+    }
+    function locationInput() {
+        var form = document.createElement('form');
+        var locationInputLabel = document.createElement('label');
+        locationInputLabel.htmlFor = "location-input";
+        locationInputLabel.textContent = "Location";
+        var locationInput = document.createElement('input');
+        locationInput.classList.add('location-input');
+        locationInput.type = "text";
+        locationInput.id = "location-input";
+        locationInput.name = "location-input";
+        function updateLocation(e) {
+            e.preventDefault();
+            locale = locationInput.value;
+            render();
+        }
+        locationInput.addEventListener('submit', function (e) { return updateLocation(e); });
+        var button = document.createElement('button');
+        button.classList.add('btn', 'btn-submit');
+        button.addEventListener('click', function (e) { return updateLocation(e); });
+        form.append(locationInput, button);
+        return form;
+    }
+    function currentWeatherDisplay(curr) {
+        var display = document.createElement('div');
+        display.classList.add('curr-weather-container');
+        var last_updated = document.createElement('p');
+        last_updated.classList.add('last-updated');
+        last_updated.innerText = curr.last_updated;
+        var temperatureContainer = document.createElement('div');
+        temperatureContainer.classList.add('temperature-container');
+        var temperature = document.createElement('p');
+        temperature.classList.add("temperature");
+        temperature.innerText = celsius ? "".concat(curr.temp_c, "\u00B0C") : "".concat(curr.temp_f, "\u00B0F");
+        var feelsLike = document.createElement('p');
+        feelsLike.classList.add('feels-like');
+        feelsLike.innerText = celsius ? "Feels like ".concat(curr.feelslike_c, "\u00B0C") : "Feels like ".concat(curr.feelslike_f, "\u00B0F");
+        temperatureContainer.append(temperature, feelsLike);
+        var _a = curr.condition, text = _a.text, icon = _a.icon, code = _a.code;
+        var conditionContainer = document.createElement('div');
+        conditionContainer.classList.add("condition-container");
+        var conditionText = document.createElement('p');
+        conditionText.classList.add('condition-text');
+        conditionText.innerText = text;
+        var conditionIcon = document.createElement('img');
+        conditionIcon.classList.add('condition-icon');
+        conditionIcon.src = "https:" + icon;
+        conditionContainer.append(conditionText, conditionIcon);
+        var windSpeedAndDir = document.createElement('p');
+        windSpeedAndDir.classList.add("wind-speed-dir");
+        windSpeedAndDir.innerText = celsius ? "".concat(curr.wind_kph, " kph ").concat(curr.wind_dir) : "".concat(curr.wind_mph, " mph ").concat(curr.wind_dir);
+        var humidity = document.createElement('p');
+        humidity.classList.add('humidity');
+        humidity.innerText = "".concat(curr.humidity, "%");
+        display.append(temperatureContainer, conditionContainer, windSpeedAndDir);
+        return display;
+    }
+    function render() {
+        return __awaiter(this, void 0, void 0, function () {
+            var currWeather, body;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, getThreeDayForecast(locale)];
+                    case 1:
+                        currWeather = (_a.sent()).current;
+                        body = document.querySelector('body');
+                        body.replaceChildren(currentWeatherDisplay(currWeather), locationInput());
+                        return [2 /*return*/, body];
+                }
+            });
+        });
+    }
+    return { currentWeatherDisplay: currentWeatherDisplay, render: render };
+})();
+page.render();
