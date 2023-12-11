@@ -131,6 +131,8 @@ interface WeatherHour {
 
 type CurrentWeatherComponent = HTMLDivElement;
 type LocationInputComponent = HTMLFormElement;
+type UnitToggleComponent = HTMLButtonElement;
+type LocationDisplayComponent = HTMLHeadingElement;
 
 const API_KEY = "4196d93d11fa4ba084241415230909";
 
@@ -144,6 +146,62 @@ async function getThreeDayForecast(location: string): Promise<APIData> {
     return data.json();
 }
 
+function celsiusToKelvin(temp_c: number): number {
+    return temp_c + 273.15;
+}
+
+function kelvinToHexColor(temperatureKelvin: number, date: Date): string {
+    const hour = date.getHours();
+  
+    // Define temperature range for color gradient
+    const minTemperature = 184; // Cool colors
+    const maxTemperature = 327; // Warm colors
+  
+    // Ensure the input temperature is within the defined range
+    const temperature = Math.max(minTemperature, Math.min(temperatureKelvin, maxTemperature));
+  
+    // Calculate the color ratio within the range
+    const ratio = (temperature - minTemperature) / (maxTemperature - minTemperature);
+  
+    // Define RGB values for cool and warm colors
+    const coolColor = [0, 128, 255]; // Cool blue
+    const warmColor = [255, 0, 0];   // Warm red
+  
+    // Interpolate between cool and warm colors based on the temperature ratio
+    const interpolatedColor = coolColor.map((coolValue, index) => {
+      const warmValue = warmColor[index];
+      const interpolatedValue = Math.round(coolValue + ratio * (warmValue - coolValue));
+      return Math.min(255, Math.max(0, interpolatedValue)); // Ensure the value is within the valid RGB range
+    });
+  
+    // Adjust brightness based on the time of day (daytime vs nighttime)
+    const isDaytime = hour >= 6 && hour < 18; // Assuming daytime is between 6 AM and 6 PM
+    const brightnessFactor = isDaytime ? 0.8 : 0.6;
+  
+    // Apply brightness adjustment to each RGB component
+    const adjustedColor = interpolatedColor.map(value => Math.round(value * brightnessFactor));
+  
+    // Convert RGB values to hex color
+    const hexColor = adjustedColor.map(value => value.toString(16)
+                                                .padStart(2, '0'))
+                                  .join('');
+  
+    return `#${hexColor}`;
+  }
+
+function getContrastText(hexColor: string): string {
+    // Convert hex color to RGB
+    const hexToRgb = (hex: string): number[] => hex.match(/[A-Za-z0-9]{2}/g)!.map(v => parseInt(v, 16));
+    const [r, g, b] = hexToRgb(hexColor);
+  
+    // Calculate relative luminance (perceived brightness) using the formula for sRGB
+    const luminance = 0.2126 * (r / 255) + 0.7152 * (g / 255) + 0.0722 * (b / 255);
+  
+    // Determine the appropriate text color based on luminance
+    const textColor = luminance > 0.5 ? '#000000' : '#ffffff';
+  
+    return textColor;
+}  
 
 const page = (() => {
     let celsius = false;
@@ -153,8 +211,16 @@ const page = (() => {
         celsius = !celsius;
     }
 
+    function locationDisplay(): LocationDisplayComponent {
+        const display: LocationDisplayComponent = document.createElement('h1');
+        display.classList.add("location-display");
+        display.textContent = locale;
+        return display;
+    }
+
     function locationInput(): LocationInputComponent {
         const form: LocationInputComponent = document.createElement('form');
+        form.classList.add("location-input-form");
 
         const locationInputLabel = document.createElement('label');
         locationInputLabel.htmlFor = "location-input";     
@@ -175,7 +241,9 @@ const page = (() => {
         locationInput.addEventListener('submit', (e) => updateLocation(e));
 
         const button = document.createElement('button');
-        button.classList.add('btn', 'btn-submit');
+        button.classList.add('btn', 'btn-submit', 'invisible-btn');
+        button.textContent = '🔍';
+        button.dataset.text = '🔍';
 
         button.addEventListener('click', (e) => updateLocation(e));
 
@@ -187,60 +255,121 @@ const page = (() => {
         const display: CurrentWeatherComponent = document.createElement('div');
         display.classList.add('curr-weather-container');
 
-        const last_updated = document.createElement('p');
-        last_updated.classList.add('last-updated')
-        last_updated.innerText = curr.last_updated;
-
         const temperatureContainer = document.createElement('div');
-        temperatureContainer.classList.add('temperature-container');
+        temperatureContainer.classList.add('temperature-container', 'sub-container');
 
         const temperature = document.createElement('p');
         temperature.classList.add("temperature");
-        temperature.innerText = celsius ? `${curr.temp_c}°C` : `${curr.temp_f}°F`;
+        temperature.textContent = celsius ? `${curr.temp_c}` : `${curr.temp_f}`;
+        
+        const sup_c = () => {
+            const c = document.createElement('sup');
+            c.textContent = '°C';
+            return c;
+        }
+        
+        const sup_f = () => {
+            const f = document.createElement('sup');
+            f.textContent = '°F';
+            return f
+        }
+
+        if (celsius) temperature.appendChild(sup_c());
+        else temperature.appendChild(sup_f());
 
         const feelsLike = document.createElement('p');
         feelsLike.classList.add('feels-like');
-        feelsLike.innerText = celsius ? `Feels like ${curr.feelslike_c}°C` : `Feels like ${curr.feelslike_f}°F`;
+        feelsLike.textContent = celsius ? `Feels like ${curr.feelslike_c}` : `Feels like ${curr.feelslike_f}`;
+        
+        if (celsius) feelsLike.appendChild(sup_c());
+        else feelsLike.appendChild(sup_f());
 
         temperatureContainer.append(temperature, feelsLike);
 
-        const { text, icon, code } = curr.condition;
-
         const conditionContainer = document.createElement('div');
-        conditionContainer.classList.add("condition-container");
+        conditionContainer.classList.add('condition-container', 'sub-container');
 
         const conditionText = document.createElement('p');
         conditionText.classList.add('condition-text');
-        conditionText.innerText = text;
+        conditionText.textContent = curr.condition.text;
 
         const conditionIcon = document.createElement('img');
         conditionIcon.classList.add('condition-icon');
-        conditionIcon.src = "https:" + icon;
+        conditionIcon.src = "https:" + curr.condition.icon;
 
         conditionContainer.append(conditionText, conditionIcon);
 
+        const detailsContainer = document.createElement('div');
+        detailsContainer.classList.add('details-container', 'sub-container');
+
         const windSpeedAndDir = document.createElement('p');
-        windSpeedAndDir.classList.add("wind-speed-dir");
+        windSpeedAndDir.classList.add('wind-speed-dir');
         windSpeedAndDir.innerText = celsius ? `${curr.wind_kph} kph ${curr.wind_dir}` : `${curr.wind_mph} mph ${curr.wind_dir}`;
 
         const humidity = document.createElement('p');
         humidity.classList.add('humidity')
-        humidity.innerText = `${curr.humidity}%`;
+        humidity.innerText = `${curr.humidity}% humidity`;
 
-        display.append(temperatureContainer, conditionContainer, windSpeedAndDir);
+        detailsContainer.append(windSpeedAndDir, humidity);
+
+        const last_updated = document.createElement('p');
+        const last_date = new Date(curr.last_updated);
+        last_updated.classList.add('last-updated')
+        last_updated.textContent = `Last updated ${last_date.toLocaleString()}`;
+
+        const containersContainer = document.createElement('div');
+        containersContainer.classList.add('containers-container');
+        containersContainer.append(temperatureContainer, conditionContainer, detailsContainer);
+
+        display.append(
+            containersContainer,
+            last_updated
+        );
+
+        const temp_k = celsiusToKelvin(curr.temp_c)
+        const color = kelvinToHexColor(temp_k, last_date);
+        const textColor = getContrastText(color);
+
+        display.style.backgroundColor = color;
+        display.style.color = textColor;
+        document.body.style.backgroundColor = textColor;
 
         return display;
     }
 
+    function unitToggle(): UnitToggleComponent {
+        const toggle: UnitToggleComponent = document.createElement('button');
+        const setting = celsius ? 'btn-us' : 'btn-eu';
+        toggle.classList.add('btn', 'btn-units', 'round-btn', setting);
+        toggle.textContent = celsius ? 'F' : 'C';
+
+        function changeToggle(e: Event): void {
+            e.preventDefault()
+            toggleCelsius();
+            render();
+        }
+
+        toggle.addEventListener('click', (e) => changeToggle(e));
+        return toggle;
+    }
+
     async function render() {
-        const currWeather = (await getThreeDayForecast(locale)).current;
+        const res = await getThreeDayForecast(locale);
+        const currWeather = res.current;
+        locale = res.location.name;
+
         const body = document.querySelector('body')!;
-        body.replaceChildren(currentWeatherDisplay(currWeather), locationInput());
+        body.replaceChildren(
+            locationDisplay(),
+            currentWeatherDisplay(currWeather), 
+            locationInput(), 
+            unitToggle()
+        );
 
         return body;
     }
 
-    return {currentWeatherDisplay, render};
+    return {render};
 })();
 
 page.render();
